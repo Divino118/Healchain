@@ -112,23 +112,29 @@
 )
 
 (define-public (update-status (id uint) (status uint))
-  (let ((device (unwrap! (map-get? devices {id: id}) ERR_DEVICE)))
+  (begin
+    ;; Validate input parameters first
+    (asserts! (valid-id? id) ERR_DEVICE)
     (asserts! (valid-phase? status) ERR_STATUS)
-    (asserts! (or (is-admin) (is-eq (get owner device) tx-sender)) ERR_AUTH)
+    
+    (let ((device (unwrap! (map-get? devices {id: id}) ERR_DEVICE)))
+      (asserts! (or (is-admin) (is-eq (get owner device) tx-sender)) ERR_AUTH)
 
-    (map-set devices 
-      {id: id}
-      (merge device {
-        status: status,
-        history: (unwrap-panic 
-          (as-max-len? 
-            (append (get history device) {status: status, time: (next-time)}) 
-            u5
+      ;; Use validated id
+      (map-set devices 
+        {id: id}
+        (merge device {
+          status: status,
+          history: (unwrap-panic 
+            (as-max-len? 
+              (append (get history device) {status: status, time: (next-time)}) 
+              u5
+            )
           )
-        )
-      })
+        })
+      )
+      (ok true)
     )
-    (ok true)
   )
 )
 
@@ -151,6 +157,8 @@
     (asserts! (valid-id? id) ERR_DEVICE)
     (asserts! (valid-cert? cert-type) ERR_CERT)
     (asserts! (is-regulator? tx-sender cert-type) ERR_AUTH)
+    
+    ;; Use validated parameters
     (asserts! (is-none (map-get? certs {id: id, type: cert-type})) ERR_DUP)
 
     (map-set certs
@@ -166,34 +174,59 @@
 )
 
 (define-read-only (verify-cert (id uint) (cert-type uint))
-  (ok (default-to false (get valid (map-get? certs {id: id, type: cert-type}))))
+  (begin
+    (asserts! (valid-id? id) ERR_DEVICE)
+    (asserts! (valid-cert? cert-type) ERR_CERT)
+    
+    (ok (default-to false (get valid (map-get? certs {id: id, type: cert-type}))))
+  )
 )
 
 (define-public (revoke-cert (id uint) (cert-type uint))
-  (let ((cert (unwrap! (map-get? certs {id: id, type: cert-type}) ERR_CERT)))
-    (asserts! 
-      (or (is-admin) (is-eq (get issuer cert) tx-sender))
-      ERR_AUTH
-    )
+  (begin
+    ;; Validate parameters before using them
+    (asserts! (valid-id? id) ERR_DEVICE)
+    (asserts! (valid-cert? cert-type) ERR_CERT)
+    
+    (let ((cert (unwrap! (map-get? certs {id: id, type: cert-type}) ERR_CERT)))
+      (asserts! 
+        (or (is-admin) (is-eq (get issuer cert) tx-sender))
+        ERR_AUTH
+      )
 
-    (map-set certs
-      {id: id, type: cert-type}
-      (merge cert {valid: false})
+      ;; Use validated parameters
+      (map-set certs
+        {id: id, type: cert-type}
+        (merge cert {valid: false})
+      )
+      (ok true)
     )
-    (ok true)
   )
 )
 
 (define-read-only (get-history (id uint))
-  (ok (get history (default-to 
-    {owner: tx-sender, status: u0, history: (list)}
-    (map-get? devices {id: id}))))
+  (begin
+    (asserts! (valid-id? id) ERR_DEVICE)
+    
+    (ok (get history (default-to 
+      {owner: tx-sender, status: u0, history: (list)}
+      (map-get? devices {id: id}))))
+  )
 )
 
 (define-read-only (get-status (id uint))
-  (ok (get status (unwrap! (map-get? devices {id: id}) ERR_DEVICE)))
+  (begin
+    (asserts! (valid-id? id) ERR_DEVICE)
+    
+    (ok (get status (unwrap! (map-get? devices {id: id}) ERR_DEVICE)))
+  )
 )
 
 (define-read-only (get-cert-details (id uint) (cert-type uint))
-  (ok (map-get? certs {id: id, type: cert-type}))
+  (begin
+    (asserts! (valid-id? id) ERR_DEVICE)
+    (asserts! (valid-cert? cert-type) ERR_CERT)
+    
+    (ok (map-get? certs {id: id, type: cert-type}))
+  )
 )
